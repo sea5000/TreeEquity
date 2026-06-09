@@ -1,0 +1,22 @@
+digraph LogicalERD {
+    rankdir=LR;
+    splines=ortho;
+    bgcolor="transparent";
+    node [shape=record, style=filled, fillcolor="#EAF2F8", color="#1B4F72", fontname="Arial", fontsize=9];
+    edge [color="#1B4F72", fontsize=9];
+
+    countries [label="{countries|id : INTEGER [PK]|name : TEXT [UNIQUE]|iso_code : TEXT|area_km2 : REAL|capital : TEXT|created_at : TIMESTAMP}"];
+    regions [label="{regions|id : INTEGER [PK]|name : TEXT|nuts_code : TEXT|population : INTEGER|area_km2 : REAL|tree_cover_km2 : REAL|tree_cover_pct : REAL}"];
+    cities [label="{cities|id : INTEGER [PK]|name : TEXT [NOT NULL]|country_id : INTEGER [FK]|capital : TEXT|fua_code : TEXT|population : INTEGER|urban_area_km2 : REAL|lat : REAL|lon : REAL|eTRS_x : REAL|eTRS_y : REAL|source : TEXT|created_at : TIMESTAMP|urban_area_fua_km2 : REAL}"];
+    urban_trees [label="{urban_trees|id : INTEGER [PK]|city_id : INTEGER [FK]|source_year : INTEGER|tree_cover_pixels : BLOB|tree_cover_km2 : REAL|urban_mask_pixels : BLOB|urban_mask_km2 : REAL|tree_percentage : REAL|created_at : TIMESTAMP}"];
+    urban_trees_ua [label="{urban_trees_ua|id : INTEGER [PK]|city_id : INTEGER [FK]|urban_km2 : REAL|forest_km2 : REAL|green_km2 : REAL|tree_pct : REAL|rank : INTEGER|created_at : TIMESTAMP}"];
+    city_rankings [label="{city_rankings|id : INTEGER [PK]|city_id : INTEGER [FK]|pop_density : REAL|tree_density : REAL|pop_to_tree_ratio : REAL|rank : INTEGER|created_at : TIMESTAMP}"];
+    population_annual [label="{population_annual|id : INTEGER [PK]|country_id : INTEGER [FK]|year : INTEGER|population_count : INTEGER}"];
+    source_metadata [label="{source_metadata|id : INTEGER [PK]|source_name : TEXT [NOT NULL]|download_date : DATE|record_count : INTEGER|notes : TEXT|created_at : TIMESTAMP}"];
+
+    countries -> cities [label="has (1:M)"];
+    countries -> population_annual [label="has annual (1:M)"];
+    cities -> urban_trees [label="measured by (1:1)"];
+    cities -> urban_trees_ua [label="classified by (1:1)"];
+    cities -> city_rankings [label="ranked by (1:1)"];
+}

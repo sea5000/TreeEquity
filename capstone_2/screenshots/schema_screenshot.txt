@@ -1,0 +1,119 @@
+====================================================================================================
+DATABASE SCHEMA — kemv.db
+====================================================================================================
+
+Table: cities
+----------------------------------------------------------------------------------------------------
+CREATE TABLE cities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            country_id INTEGER,
+            capital TEXT,
+            fua_code TEXT,
+            population INTEGER,
+            urban_area_km2 REAL,
+            lat REAL,
+            lon REAL,
+            eTRS_x REAL,
+            eTRS_y REAL,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, urban_area_fua_km2 REAL,
+            FOREIGN KEY (country_id) REFERENCES countries(id)
+        )
+
+Row count: 30
+
+Table: city_rankings
+----------------------------------------------------------------------------------------------------
+CREATE TABLE city_rankings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            city_id INTEGER NOT NULL,
+            pop_density REAL,
+            tree_density REAL,
+            pop_to_tree_ratio REAL,
+            rank INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (city_id) REFERENCES cities(id)
+        )
+
+Row count: 28
+
+Table: countries
+----------------------------------------------------------------------------------------------------
+CREATE TABLE countries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            iso_code TEXT,
+            area_km2 REAL,
+            capital TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Row count: 51
+
+Table: population_annual
+----------------------------------------------------------------------------------------------------
+CREATE TABLE population_annual (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_id INTEGER NOT NULL,
+            year INTEGER NOT NULL,
+            population_count INTEGER,
+            FOREIGN KEY (country_id) REFERENCES countries(id),
+            UNIQUE(country_id, year)
+        )
+
+Row count: 51
+
+Table: regions
+----------------------------------------------------------------------------------------------------
+CREATE TABLE regions (
+    id INTEGER PRIMARY KEY, name TEXT, nuts_code TEXT, population INTEGER, 
+    area_km2 REAL, tree_cover_km2 REAL, tree_cover_pct REAL
+)
+
+Row count: 212
+
+Table: source_metadata
+----------------------------------------------------------------------------------------------------
+CREATE TABLE source_metadata (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_name TEXT NOT NULL,
+            download_date DATE,
+            record_count INTEGER,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+
+Row count: 2
+
+Table: urban_trees
+----------------------------------------------------------------------------------------------------
+CREATE TABLE urban_trees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            city_id INTEGER NOT NULL,
+            source_year INTEGER,
+            tree_cover_pixels INTEGER,
+            tree_cover_km2 REAL,
+            urban_mask_pixels INTEGER,
+            urban_mask_km2 REAL,
+            tree_percentage REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (city_id) REFERENCES cities(id)
+        )
+
+Row count: 30
+
+Table: urban_trees_ua
+----------------------------------------------------------------------------------------------------
+CREATE TABLE urban_trees_ua (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        city_id INTEGER NOT NULL,
+        urban_km2 REAL,
+        forest_km2 REAL,
+        green_km2 REAL,
+        tree_pct REAL,
+        rank INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+
+Row count: 29

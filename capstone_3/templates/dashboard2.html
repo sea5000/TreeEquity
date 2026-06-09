@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Tree Equity Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <h1>City Tree Equity Analyzer</h1>
+        <div class="subtitle">Analytical Deep-Dive into Urban Tree Equity Metrics Across European Cities</div>
+        <div class="nav-links">
+            <a href="/dashboard1">Atlas</a>
+            <a href="/dashboard2">Analyzer</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="filters">
+            <div class="filter-group city-select-group">
+                <label for="city-select">Cities:</label>
+                <select id="city-select" multiple size="12">
+                </select>
+                <span class="city-select-hint">Ctrl+click to select multiple; click a selected city to deselect</span>
+            </div>
+            <div class="filter-group">
+                <label>Pop Range:</label>
+                <input type="range" id="pop-min" min="0" max="9000000" value="0" step="100000">
+                <input type="range" id="pop-max" min="0" max="9000000" value="9000000" step="100000">
+                <span id="pop-label" style="font-size:0.85rem;color:#666;">0 — 9M</span>
+            </div>
+            <div class="filter-group checkbox-group">
+                <label><input type="checkbox" class="equity-cb" value="Excellent" checked> Excellent</label>
+                <label><input type="checkbox" class="equity-cb" value="Good" checked> Good</label>
+                <label><input type="checkbox" class="equity-cb" value="Fair" checked> Fair</label>
+                <label><input type="checkbox" class="equity-cb" value="Needs Improvement" checked> Needs Improvement</label>
+            </div>
+        </div>
+
+        <div class="kpi-grid" id="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-city">--</div>
+                <div class="kpi-label">Selected City</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-tree">--</div>
+                <div class="kpi-label">Tree Cover %</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-rank">--</div>
+                <div class="kpi-label">Equity Rank</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-density">--</div>
+                <div class="kpi-label">Pop Density (km²)</div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card tall">
+                <h3>Population-to-Tree Ratio Ranking (lower = better)</h3>
+                <div class="chart-container">
+                    <canvas id="horiz-bar-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Population Density vs Tree Density</h3>
+                <div class="chart-container">
+                    <canvas id="density-scatter"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>City Comparison — 4 Metrics</h3>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">Select 1-2 cities above to compare</p>
+                <div class="chart-container">
+                    <canvas id="comparison-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card tall">
+                <h3>Equity Rankings — Full Dataset</h3>
+                <div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+                    <table class="data-table" id="ranking-table">
+                        <thead>
+                            <tr>
+                                <th onclick="sortRankingTable(0)">Rank</th>
+                                <th onclick="sortRankingTable(1)">City</th>
+                                <th onclick="sortRankingTable(2)">Country</th>
+                                <th onclick="sortRankingTable(3)">Pop</th>
+                                <th onclick="sortRankingTable(4)">Tree %</th>
+                                <th onclick="sortRankingTable(5)">Pop/Tree</th>
+                                <th onclick="sortRankingTable(6)">Equity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ranking-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allCities = [];
+        let chartInstances = {};
+
+        const COLORS = {
+            'Excellent': '#2d8a4e',
+            'Good': '#f0c040',
+            'Fair': '#e98a2e',
+            'Needs Improvement': '#d9534f'
+        };
+
+        const CITY_PALETTE = [
+            '#4363d8', '#e6194b', '#3cb44b', '#f58231', '#911eb4',
+            '#42d4f4', '#f032e6', '#469990', '#9a6324', '#800000',
+            '#008080', '#000080', '#008000', '#800080', '#ff6f00',
+            '#795548', '#607d8b', '#00bcd4', '#ff5722', '#4caf50',
+        ];
+        function cityColor(cityId) { return CITY_PALETTE[cityId % CITY_PALETTE.length]; }
+
+        async function loadData() {
+            const resp = await fetch('/api/cities');
+            allCities = await resp.json();
+            populateCitySelect();
+            applyFilters();
+        }
+
+        function populateCitySelect() {
+            const sel = document.getElementById('city-select');
+            allCities.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.city_id;
+                opt.textContent = `${c.city_name} (${c.country})`;
+                sel.appendChild(opt);
+            });
+        }
+
+        function getSelectedCities() {
+            const sel = document.getElementById('city-select');
+            const ids = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+            return allCities.filter(c => ids.includes(c.city_id));
+        }
+
+        function getFilteredData() {
+            const minPop = parseInt(document.getElementById('pop-min').value);
+            const maxPop = parseInt(document.getElementById('pop-max').value);
+            const checked = Array.from(document.querySelectorAll('.equity-cb:checked')).map(cb => cb.value);
+
+            return allCities.filter(c => {
+                if (c.population < minPop || c.population > maxPop) return false;
+                if (!checked.includes(c.equity_category)) return false;
+                return true;
+            });
+        }
+
+        function applyFilters() {
+            const data = getFilteredData();
+            const selected = getSelectedCities();
+            renderKPI(selected);
+            renderHorizontalBar(data, selected);
+            renderDensityScatter(data, selected);
+            renderComparisonChart(selected);
+            renderRankingTable(data, selected);
+        }
+
+        function renderKPI(selected) {
+            if (selected.length === 0) {
+                document.getElementById('kpi-city').textContent = '--';
+                document.getElementById('kpi-tree').textContent = '--';
+                document.getElementById('kpi-rank').textContent = '--';
+                document.getElementById('kpi-density').textContent = '--';
+                return;
+            }
+            const c = selected[0];
+            document.getElementById('kpi-city').textContent = c.city_name;
+            document.getElementById('kpi-tree').textContent = c.tree_pct + '%';
+            document.getElementById('kpi-rank').textContent = '#' + c.equity_rank;
+            document.getElementById('kpi-density').textContent = c.pop_density.toLocaleString();
+        }
+
+        function renderHorizontalBar(data, selected) {
+            const ctx = document.getElementById('horiz-bar-chart').getContext('2d');
+            if (chartInstances.hbar) chartInstances.hbar.destroy();
+
+            const sorted = [...data].sort((a, b) => b.pop_to_tree_ratio - a.pop_to_tree_ratio);
+            const selectedIds = selected.map(c => c.city_id);
+
+            chartInstances.hbar = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(c => c.city_name),
+                    datasets: [{
+                        label: 'People per km² of Tree Cover',
+                        data: sorted.map(c => c.pop_to_tree_ratio),
+                        backgroundColor: sorted.map(c => {
+                            if (selectedIds.includes(c.city_id)) return cityColor(c.city_id);
+                            return COLORS[c.equity_category];
+                        }),
+                        borderColor: sorted.map(c => selectedIds.includes(c.city_id) ? cityColor(c.city_id) : 'transparent'),
+                        borderWidth: sorted.map(c => selectedIds.includes(c.city_id) ? 3 : 0),
+                        borderRadius: 3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'People per km² of Tree Cover' },
+                            ticks: { callback: v => v.toLocaleString() }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderDensityScatter(data, selected) {
+            const ctx = document.getElementById('density-scatter').getContext('2d');
+            if (chartInstances.dscatter) chartInstances.dscatter.destroy();
+
+            const datasets = [];
+            for (const cat of ['Excellent', 'Good', 'Fair', 'Needs Improvement']) {
+                const pts = data.filter(c => c.equity_category === cat);
+                if (pts.length) {
+                    datasets.push({
+                        label: cat,
+                        data: pts.map(c => ({ x: c.pop_density, y: c.tree_density * 1000 })),
+                        backgroundColor: COLORS[cat],
+                    });
+                }
+            }
+
+            if (selected.length) {
+                datasets.push({
+                    label: 'Selected',
+                    data: selected.map(c => ({ x: c.pop_density, y: c.tree_density * 1000 })),
+                    backgroundColor: selected.map(c => cityColor(c.city_id)),
+                    pointRadius: 8,
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                });
+            }
+
+            chartInstances.dscatter = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const idx = ctx.dataIndex;
+                                    const ds = ctx.dataset;
+                                    const pts = allCities.filter(c => {
+                                        if (ds.label === 'Selected') return selected.includes(c);
+                                        return c.equity_category === ds.label;
+                                    });
+                                    const city = pts[idx];
+                                    return city ? `${city.city_name}: ${city.pop_density.toLocaleString()} ppl/km², ${(city.tree_density * 1000).toFixed(2)} tree density` : '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Population Density (people/km²)' },
+                            ticks: { callback: v => v.toLocaleString() }
+                        },
+                        y: {
+                            title: { display: true, text: 'Tree Density (×1000)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderComparisonChart(selected) {
+            const ctx = document.getElementById('comparison-chart').getContext('2d');
+            if (chartInstances.compare) chartInstances.compare.destroy();
+
+            const metrics = ['Tree Cover %', 'Pop Density', 'Equity Rank', 'Pop/Tree Ratio'];
+            const keys = ['tree_pct', 'pop_density', 'equity_rank', 'pop_to_tree_ratio'];
+            const suffixes = ['%', '/km²', '', ''];
+
+            if (selected.length === 0) {
+                chartInstances.compare = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: metrics, datasets: [{ label: 'Select a city', data: [0,0,0,0], backgroundColor: '#ddd' }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+                return;
+            }
+
+            const maxes = keys.map(k => Math.max(...selected.map(c => c[k]), 1));
+
+            const datasets = selected.map(c => ({
+                label: c.city_name,
+                data: keys.map((k, j) => (c[k] / maxes[j]) * 100),
+                rawValues: keys.map(k => k === 'equity_rank' ? c[k] : Math.round(c[k])),
+                backgroundColor: cityColor(c.city_id),
+                borderRadius: 4,
+            }));
+
+            chartInstances.compare = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: metrics, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const raw = ctx.dataset.rawValues[ctx.dataIndex];
+                                    const label = metrics[ctx.dataIndex];
+                                    return ctx.dataset.label + ': ' + raw.toLocaleString() + suffixes[ctx.dataIndex];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: { display: true, text: '% of max (per metric)' },
+                            ticks: { callback: v => v + '%' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderRankingTable(data, selected) {
+            const tbody = document.getElementById('ranking-body');
+            tbody.innerHTML = '';
+            data.sort((a, b) => a.equity_rank - b.equity_rank);
+
+            data.forEach(c => {
+                const cls = c.equity_category.toLowerCase().replace(' ', '-');
+                const isSelected = selected.some(s => s.city_id === c.city_id);
+                const tr = document.createElement('tr');
+                tr.className = cls + (isSelected ? ' selected' : '');
+                if (isSelected) tr.style.background = '#e8f5e9';
+                tr.innerHTML = `
+                    <td>${c.equity_rank}</td>
+                    <td><strong>${c.city_name}</strong></td>
+                    <td>${c.country}</td>
+                    <td>${c.population.toLocaleString()}</td>
+                    <td>${c.tree_pct}%</td>
+                    <td>${c.pop_to_tree_ratio.toLocaleString()}</td>
+                    <td><span class="equity-badge ${cls}">${c.equity_category}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function sortRankingTable(col) {
+            const tbody = document.getElementById('ranking-body');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const asc = tbody.dataset.sortCol == col ? tbody.dataset.sortAsc !== 'true' : true;
+            tbody.dataset.sortCol = col;
+            tbody.dataset.sortAsc = asc;
+
+            rows.sort((a, b) => {
+                let va = a.cells[col].textContent.trim();
+                let vb = b.cells[col].textContent.trim();
+                const na = parseFloat(va.replace(/[%,]/g, ''));
+                const nb = parseFloat(vb.replace(/[%,]/g, ''));
+                if (!isNaN(na) && !isNaN(nb)) return asc ? na - nb : nb - na;
+                return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        document.getElementById('city-select').addEventListener('change', applyFilters);
+        document.getElementById('pop-min').addEventListener('input', function() {
+            const max = parseInt(document.getElementById('pop-max').value);
+            const val = Math.min(parseInt(this.value), max);
+            document.getElementById('pop-label').textContent = `${(val/1e6).toFixed(1)}M — ${(max/1e6).toFixed(1)}M`;
+            applyFilters();
+        });
+        document.getElementById('pop-max').addEventListener('input', function() {
+            const min = parseInt(document.getElementById('pop-min').value);
+            const val = Math.max(parseInt(this.value), min);
+            document.getElementById('pop-label').textContent = `${(min/1e6).toFixed(1)}M — ${(val/1e6).toFixed(1)}M`;
+            applyFilters();
+        });
+        document.querySelectorAll('.equity-cb').forEach(cb => cb.addEventListener('change', applyFilters));
+
+        loadData();
+    </script>
+</body>
+</html>

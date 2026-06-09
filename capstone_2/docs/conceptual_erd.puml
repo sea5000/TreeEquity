@@ -1,0 +1,34 @@
+@startuml
+!theme plain
+
+skinparam rectangle {
+  BorderColor #2E86C1
+  BackgroundColor #D6EAF8
+}
+
+rectangle Country as "Country\n(name, iso_code, area, capital)"
+rectangle "NUTS Region" as Region "(name, nuts_code, population,\n area_km2, tree_cover_km2, tree_cover_pct)"
+rectangle City as "City\n(name, population, urban_area,\n coordinates, fua_code)"
+rectangle "Urban Tree Canopy" as TreeCover "(tree_cover_km2,\n tree_percentage, source_year)"
+rectangle "Urban Atlas\nLand Cover" as LandCover "(urban_km2, forest_km2,\n green_km2, tree_pct)"
+rectangle "City Ranking" as Ranking "(pop_density, tree_density,\n pop_to_tree_ratio, rank)"
+rectangle "Population\nRecord" as PopRecord "(year,\n population_count)"
+rectangle "Data Source" as Source "(source_name,\n download_date,\n record_count)"
+
+Country -right-> Region : "contains"
+Country -right-> City : "contains"
+Country -down-> PopRecord : "has annual"
+
+City -right-> TreeCover : "measured by"
+City -right-> LandCover : "classified by"
+City -right-> Ranking : "ranked by"
+
+Region -down-> City : "contains"
+
+Source .down.> Country : "documents"
+Source .down.> Region
+Source .down.> City
+Source .down.> TreeCover
+Source .down.> LandCover
+
+@enduml

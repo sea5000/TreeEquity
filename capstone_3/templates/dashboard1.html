@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>European Tree Cover Atlas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <h1>European Tree Cover Atlas</h1>
+        <div class="subtitle">Strategic Overview of Urban Tree Equity Across 28 European Cities</div>
+        <div class="nav-links">
+            <a href="/dashboard1">Atlas</a>
+            <a href="/dashboard2">Analyzer</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="filters">
+            <div class="filter-group">
+                <label for="country-filter">Country:</label>
+                <select id="country-filter">
+                    <option value="">All Countries</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="equity-filter">Equity:</label>
+                <select id="equity-filter">
+                    <option value="">All Categories</option>
+                    <option value="Excellent">Excellent</option>
+                    <option value="Good">Good</option>
+                    <option value="Fair">Fair</option>
+                    <option value="Needs Improvement">Needs Improvement</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="city-search">Search City:</label>
+                <input type="text" id="city-search" class="city-search" placeholder="Type city name...">
+            </div>
+        </div>
+
+        <div class="summary-stats" id="summary-stats">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-cities">--</div>
+                <div class="stat-label">Cities</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-avg-tree">--</div>
+                <div class="stat-label">Avg Tree Cover %</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-best">--</div>
+                <div class="stat-label">Best City</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-worst">--</div>
+                <div class="stat-label">Worst City</div>
+            </div>
+        </div>
+
+        <div class="chart-card methodology-card">
+            <h3>Methodology</h3>
+            <p><strong>Tree cover percentage</strong> is calculated as <code>tree_cover_km² ÷ urban_area_km² × 100</code> for each city. <strong>Equity categories</strong> are assigned by quartile breaks of the <code>population-to-tree ratio</code> (people per km² of tree cover). Lower ratios indicate better tree equity — fewer people sharing each km² of canopy.</p>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card tall">
+                <h3>City Map — Geographic Distribution of Tree Equity</h3>
+                <div class="chart-container" id="map-container">
+                    <div id="map" style="height:100%;width:100%;border-radius:6px;"></div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Equity Category Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="donut-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>Top 10 Cities by Tree Cover Percentage</h3>
+                <div class="chart-container">
+                    <canvas id="bar-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Population vs Tree Cover Percentage</h3>
+                <div class="chart-container">
+                    <canvas id="scatter-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-card full-width">
+            <h3>City Rankings — Complete Dataset</h3>
+            <div style="overflow-x:auto;">
+                <table class="data-table" id="city-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">Rank</th>
+                            <th onclick="sortTable(1)">City</th>
+                            <th onclick="sortTable(2)">Country</th>
+                            <th onclick="sortTable(3)">Population</th>
+                            <th onclick="sortTable(4)">Tree %</th>
+                            <th onclick="sortTable(5)">Pop Density</th>
+                            <th onclick="sortTable(6)">Pop/Tree Ratio</th>
+                            <th onclick="sortTable(7)">Equity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allCities = [];
+        let chartInstances = {};
+
+        const COLORS = {
+            'Excellent': '#2d8a4e',
+            'Good': '#f0c040',
+            'Fair': '#e98a2e',
+            'Needs Improvement': '#d9534f'
+        };
+
+        let mapInitialized = false;
+        let leafletMap = null;
+
+        async function loadData() {
+            const resp = await fetch('/api/cities');
+            allCities = await resp.json();
+            populateFilters();
+            renderDashboard(allCities);
+        }
+
+        function populateFilters() {
+            const countries = [...new Set(allCities.map(c => c.country))].sort();
+            const sel = document.getElementById('country-filter');
+            countries.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                sel.appendChild(opt);
+            });
+        }
+
+        function getFilteredData() {
+            const country = document.getElementById('country-filter').value;
+            const equity = document.getElementById('equity-filter').value;
+            const query = document.getElementById('city-search').value.toLowerCase();
+
+            return allCities.filter(c => {
+                if (country && c.country !== country) return false;
+                if (equity && c.equity_category !== equity) return false;
+                if (query && !c.city_name.toLowerCase().includes(query)) return false;
+                return true;
+            });
+        }
+
+        function renderDashboard(data) {
+            updateStats(data);
+            renderMap(data);
+            renderDonut(data);
+            renderTop10Bar(data);
+            renderScatter(data);
+            renderTable(data);
+        }
+
+        function updateStats(data) {
+            document.getElementById('stat-cities').textContent = data.length;
+            const avg = data.reduce((s, c) => s + c.tree_pct, 0) / data.length;
+            document.getElementById('stat-avg-tree').textContent = avg.toFixed(1) + '%';
+
+            const byEquity = [...data].sort((a, b) => a.equity_rank - b.equity_rank);
+            document.getElementById('stat-best').textContent = byEquity.length ? byEquity[0].city_name : '--';
+            document.getElementById('stat-worst').textContent = byEquity.length ? byEquity[byEquity.length - 1].city_name : '--';
+        }
+
+        function renderMap(data) {
+            const container = document.getElementById('map');
+            if (!container) return;
+
+            if (!mapInitialized) {
+                leafletMap = L.map('map', { zoomControl: true }).setView([50, 10], 4);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors',
+                    maxZoom: 10,
+                }).addTo(leafletMap);
+                mapInitialized = true;
+            }
+
+            leafletMap.eachLayer(layer => {
+                if (layer instanceof L.CircleMarker) leafletMap.removeLayer(layer);
+            });
+
+            const legend = L.control({ position: 'bottomright' });
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'info legend');
+                div.style.background = 'white';
+                div.style.padding = '10px 14px';
+                div.style.borderRadius = '4px';
+                div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.2)';
+                div.style.fontSize = '13px';
+                div.style.minWidth = '170px';
+                div.innerHTML = '<strong>Circle Size = Population</strong><br>';
+                const sizes = [
+                    { r: 6,  label: '≤1.8M' },
+                    { r: 12, label: '~3.6M' },
+                    { r: 18, label: '≥5.4M' },
+                ];
+                sizes.forEach(s => {
+                    div.innerHTML += `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;"><span style="display:inline-block;width:${s.r*2}px;height:${s.r*2}px;border-radius:50%;background:#555;opacity:0.6;border:1px solid #888;flex-shrink:0;"></span> ${s.label}</div>`;
+                });
+                div.innerHTML += '<hr style="margin:6px 0;border:none;border-top:1px solid #ddd;">';
+                div.innerHTML += '<strong>Color = Equity</strong><br>';
+                for (const [cat, color] of Object.entries(COLORS)) {
+                    div.innerHTML += `<span style="display:inline-block;width:12px;height:12px;background:${color};border-radius:2px;margin-right:4px;"></span> ${cat}<br>`;
+                }
+                return div;
+            };
+            legend.addTo(leafletMap);
+
+            data.forEach(c => {
+                const radius = Math.max(6, Math.min(18, c.population / 300000));
+                L.circleMarker([c.lat, c.lon], {
+                    radius: radius,
+                    fillColor: COLORS[c.equity_category],
+                    color: '#fff',
+                    weight: 1.5,
+                    opacity: 1,
+                    fillOpacity: 0.85,
+                }).addTo(leafletMap)
+                  .bindPopup(`
+                      <strong>${c.city_name}</strong><br>
+                      ${c.country}<br>
+                      Tree cover: <strong>${c.tree_pct}%</strong><br>
+                      Equity rank: #${c.equity_rank}<br>
+                      Population: ${c.population.toLocaleString()}<br>
+                      <span class="equity-badge ${c.equity_category.toLowerCase().replace(' ', '-')}">${c.equity_category}</span>
+                  `);
+            });
+
+            const allCoords = data.map(c => [c.lat, c.lon]);
+            if (allCoords.length) leafletMap.fitBounds(allCoords, { padding: [30, 30] });
+            setTimeout(() => leafletMap.invalidateSize(), 300);
+        }
+
+        function renderDonut(data) {
+            const ctx = document.getElementById('donut-chart').getContext('2d');
+            if (chartInstances.donut) chartInstances.donut.destroy();
+
+            const counts = { 'Excellent': 0, 'Good': 0, 'Fair': 0, 'Needs Improvement': 0 };
+            data.forEach(c => { counts[c.equity_category]++; });
+
+            chartInstances.donut = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: ['#2d8a4e', '#f0c040', '#e98a2e', '#d9534f'],
+                        borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                    }
+                }
+            });
+        }
+
+        function renderTop10Bar(data) {
+            const ctx = document.getElementById('bar-chart').getContext('2d');
+            if (chartInstances.bar) chartInstances.bar.destroy();
+
+            const sorted = [...data].sort((a, b) => b.tree_pct - a.tree_pct).slice(0, 10);
+
+            chartInstances.bar = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(c => c.city_name),
+                    datasets: [{
+                        label: 'Tree Cover %',
+                        data: sorted.map(c => c.tree_pct),
+                        backgroundColor: sorted.map(c => COLORS[c.equity_category]),
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Tree Cover %' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderScatter(data) {
+            const ctx = document.getElementById('scatter-chart').getContext('2d');
+            if (chartInstances.scatter) chartInstances.scatter.destroy();
+
+            const datasets = [];
+            for (const cat of ['Excellent', 'Good', 'Fair', 'Needs Improvement']) {
+                const pts = data.filter(c => c.equity_category === cat);
+                if (pts.length) {
+                    datasets.push({
+                        label: cat,
+                        data: pts.map(c => ({ x: c.population / 1000000, y: c.tree_pct })),
+                        backgroundColor: COLORS[cat],
+                    });
+                }
+            }
+
+            chartInstances.scatter = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const idx = ctx.dataIndex;
+                                    const ds = ctx.dataset.data;
+                                    const pts = data.filter(c => c.equity_category === ctx.dataset.label);
+                                    const city = pts[idx];
+                                    return city ? `${city.city_name}: ${city.population.toLocaleString()} people, ${city.tree_pct}% tree` : '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Population (millions)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Tree Cover %' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            data.forEach(c => {
+                const cls = c.equity_category.toLowerCase().replace(' ', '-');
+                const tr = document.createElement('tr');
+                tr.className = cls;
+                tr.innerHTML = `
+                    <td>${c.equity_rank}</td>
+                    <td><strong>${c.city_name}</strong></td>
+                    <td>${c.country}</td>
+                    <td>${c.population.toLocaleString()}</td>
+                    <td>${c.tree_pct}%</td>
+                    <td>${c.pop_density.toLocaleString()}</td>
+                    <td>${c.pop_to_tree_ratio.toLocaleString()}</td>
+                    <td><span class="equity-badge ${cls}">${c.equity_category}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function sortTable(col) {
+            const tbody = document.getElementById('table-body');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const asc = tbody.dataset.sortCol == col ? tbody.dataset.sortAsc !== 'true' : true;
+            tbody.dataset.sortCol = col;
+            tbody.dataset.sortAsc = asc;
+
+            rows.sort((a, b) => {
+                let va = a.cells[col].textContent.trim();
+                let vb = b.cells[col].textContent.trim();
+                const na = parseFloat(va.replace(/[%,]/g, ''));
+                const nb = parseFloat(vb.replace(/[%,]/g, ''));
+                if (!isNaN(na) && !isNaN(nb)) return asc ? na - nb : nb - na;
+                return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        document.getElementById('country-filter').addEventListener('change', () => renderDashboard(getFilteredData()));
+        document.getElementById('equity-filter').addEventListener('change', () => renderDashboard(getFilteredData()));
+        document.getElementById('city-search').addEventListener('input', () => renderDashboard(getFilteredData()));
+
+        loadData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+digraph ConceptualERD {
+    rankdir=LR;
+    splines=ortho;
+    bgcolor="transparent";
+    node [shape=box, style=filled, fillcolor="#D6EAF8", color="#2E86C1"];
+    edge [color="#2E86C1", fontsize=10];
+
+    // Entities
+    Country [label="{Country|name\lniso_code\larea\lncapital\l}", shape=Mrecord];
+    Region [label="{NUTS Region|name\lnnuts_code\lpopulation\larea_km2\ltree_cover_km2\ltree_cover_pct\l}", shape=Mrecord];
+    City [label="{City|name\lpopulation\lurban_area\lcoordinates\lfua_code\l}", shape=Mrecord];
+    TreeCover [label="{Urban Tree Canopy|tree_cover_km2\ltree_percentage\l}", shape=Mrecord];
+    LandCover [label="{Urban Atlas\nLand Cover}|urban_km2\lforest_km2\lgreen_km2\ltree_pct\l", shape=Mrecord];
+    Ranking [label="{City Ranking|pop_density\ltree_density\lpop_to_tree_ratio\lrank\l}", shape=Mrecord];
+    PopRecord [label="{Population\nRecord}|year\lpopulation\l", shape=Mrecord];
+    Source [label="{Data Source|source_name\ldownload_date\lrecord_count\l}", shape=Mrecord, fillcolor="#FAD7A0", color="#CA6F1E"];
+
+    // Relationships
+    Country -> Region [label="contains (1:M)"];
+    Country -> City [label="contains (1:M)"];
+    Country -> PopRecord [label="has annual (1:M)"];
+    City -> TreeCover [label="measured by (1:1)"];
+    City -> LandCover [label="classified by (1:1)"];
+    City -> Ranking [label="ranked by (1:1)"];
+    Region -> City [label="contains (1:M)", style=dashed];
+
+    // Source metadata (dashed, documents all)
+    Source -> Country [style=dashed, label="documents", color="#CA6F1E"];
+    Source -> Region [style=dashed, color="#CA6F1E"];
+    Source -> City [style=dashed, color="#CA6F1E"];
+    Source -> TreeCover [style=dashed, color="#CA6F1E"];
+    Source -> LandCover [style=dashed, color="#CA6F1E"];
+}

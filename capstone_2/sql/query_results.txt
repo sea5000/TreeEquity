@@ -1,0 +1,218 @@
+======================================================================
+  EASY QUERY 1: Cities per Country with Average Population
+======================================================================
+SELECT
+    c.name AS country_name,
+    COUNT(ci.id) AS city_count,
+    AVG(ci.population) AS avg_city_population
+FROM countries c
+JOIN cities ci ON ci.country_id = c.id
+GROUP BY c.name
+ORDER BY city_count DESC, avg_city_population DESC
+
+Rows returned: 30
+
+country_name    city_count  avg_city_population
+--------------  ----------  -------------------
+United Kingdom  1           8982000.0          
+Germany         1           3644000.0          
+Spain           1           3223000.0          
+Italy           1           2873000.0          
+France          1           2161000.0          
+Austria         1           1897491.0          
+Romania         1           1883000.0          
+Poland          1           1790000.0          
+Hungary         1           1756000.0          
+Czechia         1           1309000.0          
+Bulgaria        1           1241675.0          
+Belgium         1           1208542.0          
+Sweden          1           960031.0           
+Netherlands     1           855920.0           
+Norway          1           693494.0           
+Croatia         1           686799.0           
+Greece          1           664046.0           
+Finland         1           653835.0           
+Latvia          1           614000.0           
+Denmark         1           602481.0           
+Ireland         1           544107.0           
+Liechtenstein   1           542000.0           
+Portugal        1           504718.0           
+Estonia         1           437000.0           
+Slovakia        1           423000.0           
+Switzerland     1           357000.0           
+Cyprus          1           330000.0           
+Slovenia        1           279000.0           
+Luxembourg      1           119000.0           
+Malta           1           6444.0             
+
+======================================================================
+  EASY QUERY 2: Cities with Above-Average Tree Cover
+======================================================================
+SELECT
+    ci.name AS city_name,
+    ROUND(ut.tree_percentage, 2) AS tree_pct,
+    ROUND(ut.tree_cover_km2, 2) AS tree_km2
+FROM cities ci
+JOIN urban_trees ut ON ut.city_id = ci.id
+WHERE ut.tree_percentage > 2.0
+ORDER BY ut.tree_percentage DESC
+
+Rows returned: 21
+
+city_name   tree_pct  tree_km2
+----------  --------  --------
+Bern        7.08      2.27    
+Dublin      6.74      7.95    
+Tallinn     6.68      10.63   
+Riga        6.54      20.07   
+Oslo        6.47      29.38   
+Berlin      6.41      57.15   
+Budapest    5.72      30.05   
+Lisbon      5.46      5.46    
+Madrid      4.87      29.44   
+Copenhagen  4.82      4.25    
+Vilnius     4.71      18.9    
+Bratislava  4.46      16.38   
+London      4.22      66.3    
+Stockholm   3.93      7.38    
+Sofia       3.13      7.51    
+Luxembourg  3.03      1.55    
+Brussels    2.73      4.43    
+Zagreb      2.68      17.16   
+Paris       2.13      2.23    
+Valletta    2.12      0.04    
+Helsinki    2.08      4.43    
+
+======================================================================
+  MEDIUM QUERY 1: Top 10 Cities by Tree Equity Ranking
+======================================================================
+SELECT
+    ci.name AS city_name,
+    SUBSTR(c.name, 1, 3) AS country_code,
+    ROUND(ut.tree_percentage, 2) AS tree_pct,
+    ROUND(cr.pop_density, 0) AS pop_density,
+    cr.rank AS equity_rank
+FROM cities ci
+JOIN countries c ON c.id = ci.country_id
+JOIN urban_trees ut ON ut.city_id = ci.id
+JOIN city_rankings cr ON cr.city_id = ci.id
+WHERE ut.tree_percentage > 1.0
+ORDER BY cr.rank ASC
+LIMIT 10
+
+Rows returned: 10
+
+city_name  country_code  tree_pct  pop_density  equity_rank
+---------  ------------  --------  -----------  -----------
+Paris      Fra           2.13      20581.0      3          
+Bucharest  Rom           1.69      8259.0       4          
+Vienna     Aus           1.53      4572.0       5          
+Brussels   Bel           2.73      7460.0       6          
+Warsaw     Pol           1.39      3462.0       7          
+Amsterdam  Net           1.6       3908.0       8          
+Sofia      Bul           3.13      5174.0       10         
+Bern       Swi           7.08      11156.0      11         
+Valletta   Mal           2.12      3222.0       12         
+Helsinki   Fin           2.08      3070.0       13         
+
+======================================================================
+  MEDIUM QUERY 2: National Population Context for Cities
+======================================================================
+SELECT
+    c.name AS country_name,
+    SUBSTR(c.iso_code, 1, 2) AS iso,
+    COUNT(ci.id) AS cities_in_dataset,
+    pa.population_count AS national_pop_2025,
+    ROUND(pa.population_count / COUNT(ci.id), 0) AS pop_per_city_ratio
+FROM countries c
+JOIN population_annual pa ON pa.country_id = c.id
+JOIN cities ci ON ci.country_id = c.id
+WHERE pa.year = 2025
+GROUP BY c.name
+ORDER BY national_pop_2025 DESC
+
+Rows returned: 30
+
+country_name    iso  cities_in_dataset  national_pop_2025  pop_per_city_ratio
+--------------  ---  -----------------  -----------------  ------------------
+Germany         DE   1                  81440000           81440000.0        
+United Kingdom  GB   1                  67090000           67090000.0        
+France          FR   1                  63248000           63248000.0        
+Italy           IT   1                  60681514           60681514.0        
+Spain           ES   1                  53000000           53000000.0        
+Poland          PL   1                  38038000           38038000.0        
+Romania         RO   1                  19042936           19042936.0        
+Netherlands     NL   1                  16695000           16695000.0        
+Greece          GR   1                  10760136           10760136.0        
+Portugal        PT   1                  10555853           10555853.0        
+Belgium         BE   1                  10431477           10431477.0        
+Czechia         CZ   1                  10190213           10190213.0        
+Hungary         HU   1                  9976062            9976062.0         
+Austria         AT   1                  9113974            9113974.0         
+Sweden          SE   1                  9088728            9088728.0         
+Switzerland     CH   1                  7639961            7639961.0         
+Bulgaria        BG   1                  6714560            6714560.0         
+Norway          NO   1                  5601049            5601049.0         
+Denmark         DK   1                  5529888            5529888.0         
+Slovakia        SK   1                  5435273            5435273.0         
+Finland         FI   1                  5259250            5259250.0         
+Ireland         IE   1                  4581269            4581269.0         
+Croatia         HR   1                  4290612            4290612.0         
+Latvia          LV   1                  2204708            2204708.0         
+Slovenia        SI   1                  2000092            2000092.0         
+Cyprus          CY   1                  1380392            1380392.0         
+Estonia         EE   1                  1282963            1282963.0         
+Luxembourg      LU   1                  503302             503302.0          
+Malta           MT   1                  408333             408333.0          
+Liechtenstein   LI   1                  35236              35236.0           
+
+======================================================================
+  DIFFICULT QUERY: Multi-Factor City Tree Equity Analysis (4 tables, subquery, date fn, CASE)
+======================================================================
+SELECT
+    ci.name AS city_name,
+    SUBSTR(ci.name, 1, 4) AS short_name,
+    c.name AS country,
+    ROUND(ut.tree_percentage, 2) AS tree_pct,
+    ROUND(cr.pop_density, 0) AS pop_per_km2,
+    ROUND(cr.pop_to_tree_ratio, 0) AS people_per_tree_km2,
+    cr.rank AS equity_rank,
+    CAST(strftime('%Y', 'now') AS INTEGER) - ut.source_year AS years_since_measured,
+    CASE
+        WHEN cr.rank <= 5 THEN 'Excellent'
+        WHEN cr.rank <= 15 THEN 'Good'
+        ELSE 'Needs Improvement'
+    END AS equity_category,
+    ut.source_year AS measurement_year
+FROM cities ci
+JOIN countries c ON c.id = ci.country_id
+JOIN urban_trees ut ON ut.city_id = ci.id
+JOIN city_rankings cr ON cr.city_id = ci.id
+WHERE ci.population > 500000
+  AND cr.pop_to_tree_ratio < (
+    SELECT AVG(cr2.pop_to_tree_ratio)
+    FROM city_rankings cr2
+  )
+ORDER BY cr.rank ASC
+
+Rows returned: 17
+
+city_name   short_name  country         tree_pct  pop_per_km2  people_per_tree_km2  equity_rank  years_since_measured  equity_category    measurement_year
+----------  ----------  --------------  --------  -----------  -------------------  -----------  --------------------  -----------------  ----------------
+Brussels    Brus        Belgium         2.73      7460.0       272932.0             6            11                    Good               2015            
+Warsaw      Wars        Poland          1.39      3462.0       249930.0             7            11                    Good               2015            
+Amsterdam   Amst        Netherlands     1.6       3908.0       243644.0             8            11                    Good               2015            
+Sofia       Sofi        Bulgaria        3.13      5174.0       165380.0             10           11                    Good               2015            
+Helsinki    Hels        Finland         2.08      3070.0       147693.0             13           11                    Good               2015            
+Copenhagen  Cope        Denmark         4.82      6846.0       141927.0             14           11                    Good               2015            
+London      Lond        United Kingdom  4.22      5714.0       135479.0             15           11                    Good               2015            
+Stockholm   Stoc        Sweden          3.93      5107.0       130050.0             16           11                    Needs Improvement  2015            
+Madrid      Madr        Spain           4.87      5336.0       109492.0             17           11                    Needs Improvement  2015            
+Lisbon      Lisb        Portugal        5.46      5047.0       92473.0              18           11                    Needs Improvement  2015            
+Dublin      Dubl        Ireland         6.74      4611.0       68424.0              20           11                    Needs Improvement  2015            
+Berlin      Berl        Germany         6.41      4085.0       63758.0              21           11                    Needs Improvement  2015            
+Budapest    Buda        Hungary         5.72      3345.0       58446.0              22           11                    Needs Improvement  2015            
+Zagreb      Zagr        Croatia         2.68      1071.0       40026.0              24           11                    Needs Improvement  2015            
+Riga        Riga        Latvia          6.54      2000.0       30593.0              25           11                    Needs Improvement  2015            
+Vilnius     Viln        Liechtenstein   4.71      1352.0       28685.0              26           11                    Needs Improvement  2015            
+Oslo        Oslo        Norway          6.47      1528.0       23608.0              28           11                    Needs Improvement  2015            

@@ -1,0 +1,108 @@
+@startuml
+!theme plain
+
+skinparam entity {
+  BorderColor #1B4F72
+  BackgroundColor #EAF2F8
+}
+
+entity "countries" as countries {
+  * id : INTEGER <<PK>>
+  --
+  * name : TEXT <<UNIQUE>>
+  iso_code : TEXT
+  area_km2 : REAL
+  capital : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "regions" as regions {
+  * id : INTEGER <<PK>>
+  --
+  name : TEXT
+  nuts_code : TEXT
+  population : INTEGER
+  area_km2 : REAL
+  tree_cover_km2 : REAL
+  tree_cover_pct : REAL
+}
+
+entity "cities" as cities {
+  * id : INTEGER <<PK>>
+  --
+  * name : TEXT
+  country_id : INTEGER <<FK>>
+  capital : TEXT
+  fua_code : TEXT
+  population : INTEGER
+  urban_area_km2 : REAL
+  lat : REAL
+  lon : REAL
+  eTRS_x : REAL
+  eTRS_y : REAL
+  source : TEXT
+  created_at : TIMESTAMP
+  urban_area_fua_km2 : REAL
+}
+
+entity "urban_trees" as urban_trees {
+  * id : INTEGER <<PK>>
+  --
+  * city_id : INTEGER <<FK>>
+  source_year : INTEGER
+  tree_cover_pixels : BLOB
+  tree_cover_km2 : REAL
+  urban_mask_pixels : BLOB
+  urban_mask_km2 : REAL
+  tree_percentage : REAL
+  created_at : TIMESTAMP
+}
+
+entity "urban_trees_ua" as urban_trees_ua {
+  * id : INTEGER <<PK>>
+  --
+  * city_id : INTEGER <<FK>>
+  urban_km2 : REAL
+  forest_km2 : REAL
+  green_km2 : REAL
+  tree_pct : REAL
+  rank : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "city_rankings" as city_rankings {
+  * id : INTEGER <<PK>>
+  --
+  * city_id : INTEGER <<FK>>
+  pop_density : REAL
+  tree_density : REAL
+  pop_to_tree_ratio : REAL
+  rank : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "population_annual" as population_annual {
+  * id : INTEGER <<PK>>
+  --
+  * country_id : INTEGER <<FK>>
+  * year : INTEGER
+  population_count : INTEGER
+}
+
+entity "source_metadata" as source_metadata {
+  * id : INTEGER <<PK>>
+  --
+  * source_name : TEXT
+  download_date : DATE
+  record_count : INTEGER
+  notes : TEXT
+  created_at : TIMESTAMP
+}
+
+countries ||--o{ cities : "has"
+countries ||--o{ population_annual : "has annual"
+cities ||--o| urban_trees : "measured by"
+cities ||--o| urban_trees_ua : "classified by"
+cities ||--o| city_rankings : "ranked by"
+
+@enduml
