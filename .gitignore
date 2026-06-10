@@ -2,3 +2,4 @@ _backup/
 *.db
 *.sav
 *.csv
+*.pyc
