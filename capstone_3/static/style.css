@@ -170,6 +170,11 @@ body {
     height: 200px;
 }
 
+.chart-card.plotly-card .chart-container {
+    height: 320px;
+    min-height: 320px;
+}
+
 table.data-table {
     width: 100%;
     border-collapse: collapse;

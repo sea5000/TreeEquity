@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>European Tree Cover Atlas</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist@2/plotly-basic.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -12,7 +13,7 @@
 <body>
     <div class="header">
         <h1>European Tree Cover Atlas</h1>
-        <div class="subtitle">Strategic Overview of Urban Tree Equity Across 28 European Cities</div>
+        <div class="subtitle">Strategic Overview of Urban Tree Equity Across 98 European Cities</div>
         <div class="nav-links">
             <a href="/dashboard1">Atlas</a>
             <a href="/dashboard2">Analyzer</a>
@@ -64,7 +65,7 @@
 
         <div class="chart-card methodology-card">
             <h3>Methodology</h3>
-            <p><strong>Tree cover percentage</strong> is calculated as <code>tree_cover_km² ÷ urban_area_km² × 100</code> for each city. <strong>Equity categories</strong> are assigned by quartile breaks of the <code>population-to-tree ratio</code> (people per km² of tree cover). Lower ratios indicate better tree equity — fewer people sharing each km² of canopy.</p>
+            <p><strong>Tree cover percentage</strong> is calculated as <code>tree_cover_km² ÷ urban_area_km² × 100</code> for each city. <strong>Equity categories</strong> are assigned dynamically by quartile breaks of the <code>population-to-tree ratio</code> (people per km² of tree cover). Lower ratios indicate better tree equity — fewer people sharing each km² of canopy. Dataset: 98 European cities.</p>
         </div>
 
         <div class="chart-grid">
@@ -94,6 +95,13 @@
                 <div class="chart-container">
                     <canvas id="scatter-chart"></canvas>
                 </div>
+            </div>
+        </div>
+
+        <div class="chart-card full-width plotly-card">
+            <h3>City Tree Canopy Equity Distribution by Quartile</h3>
+            <div class="chart-container" id="box-plot-container">
+                <div id="box-plot" style="height:100%;width:100%;border-radius:6px;"></div>
             </div>
         </div>
 
@@ -133,9 +141,31 @@
         let mapInitialized = false;
         let leafletMap = null;
 
+        function quartile(sorted, q) {
+            const pos = (sorted.length - 1) * q;
+            const lower = Math.floor(pos);
+            const upper = Math.ceil(pos);
+            if (lower === upper) return sorted[lower];
+            return sorted[lower] + (sorted[upper] - sorted[lower]) * (pos - lower);
+        }
+
+        function computeEquityCategories(cities) {
+            const values = cities.map(c => c.pop_to_tree_ratio).sort((a, b) => a - b);
+            const q1 = quartile(values, 0.25);
+            const q2 = quartile(values, 0.5);
+            const q3 = quartile(values, 0.75);
+            return cities.map(c => ({
+                ...c,
+                equity_category: c.pop_to_tree_ratio <= q1 ? 'Excellent'
+                    : c.pop_to_tree_ratio <= q2 ? 'Good'
+                    : c.pop_to_tree_ratio <= q3 ? 'Fair'
+                    : 'Needs Improvement'
+            }));
+        }
+
         async function loadData() {
             const resp = await fetch('/api/cities');
-            allCities = await resp.json();
+            allCities = computeEquityCategories(await resp.json());
             populateFilters();
             renderDashboard(allCities);
         }
@@ -170,6 +200,7 @@
             renderDonut(data);
             renderTop10Bar(data);
             renderScatter(data);
+            renderBoxPlot(data);
             renderTable(data);
         }
 
@@ -187,12 +218,42 @@
             const container = document.getElementById('map');
             if (!container) return;
 
+            const mapData = data.filter(c => c.lat != null && c.lon != null);
+            if (mapData.length === 0) return;
+
             if (!mapInitialized) {
                 leafletMap = L.map('map', { zoomControl: true }).setView([50, 10], 4);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; OpenStreetMap contributors',
                     maxZoom: 10,
                 }).addTo(leafletMap);
+
+                const legend = L.control({ position: 'bottomright' });
+                legend.onAdd = function() {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.style.background = 'white';
+                    div.style.padding = '10px 14px';
+                    div.style.borderRadius = '4px';
+                    div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.2)';
+                    div.style.fontSize = '13px';
+                    div.style.minWidth = '170px';
+                    div.innerHTML = '<strong>Circle Size = Population</strong><br>';
+                    const sizes = [
+                        { r: 6,  label: '\u22641.8M' },
+                        { r: 12, label: '~3.6M' },
+                        { r: 18, label: '\u22655.4M' },
+                    ];
+                    sizes.forEach(s => {
+                        div.innerHTML += `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;"><span style="display:inline-block;width:${s.r*2}px;height:${s.r*2}px;border-radius:50%;background:#555;opacity:0.6;border:1px solid #888;flex-shrink:0;"></span> ${s.label}</div>`;
+                    });
+                    div.innerHTML += '<hr style="margin:6px 0;border:none;border-top:1px solid #ddd;">';
+                    div.innerHTML += '<strong>Color = Equity</strong><br>';
+                    for (const [cat, color] of Object.entries(COLORS)) {
+                        div.innerHTML += `<span style="display:inline-block;width:12px;height:12px;background:${color};border-radius:2px;margin-right:4px;"></span> ${cat}<br>`;
+                    }
+                    return div;
+                };
+                legend.addTo(leafletMap);
                 mapInitialized = true;
             }
 
@@ -200,34 +261,7 @@
                 if (layer instanceof L.CircleMarker) leafletMap.removeLayer(layer);
             });
 
-            const legend = L.control({ position: 'bottomright' });
-            legend.onAdd = function() {
-                const div = L.DomUtil.create('div', 'info legend');
-                div.style.background = 'white';
-                div.style.padding = '10px 14px';
-                div.style.borderRadius = '4px';
-                div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.2)';
-                div.style.fontSize = '13px';
-                div.style.minWidth = '170px';
-                div.innerHTML = '<strong>Circle Size = Population</strong><br>';
-                const sizes = [
-                    { r: 6,  label: '≤1.8M' },
-                    { r: 12, label: '~3.6M' },
-                    { r: 18, label: '≥5.4M' },
-                ];
-                sizes.forEach(s => {
-                    div.innerHTML += `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;"><span style="display:inline-block;width:${s.r*2}px;height:${s.r*2}px;border-radius:50%;background:#555;opacity:0.6;border:1px solid #888;flex-shrink:0;"></span> ${s.label}</div>`;
-                });
-                div.innerHTML += '<hr style="margin:6px 0;border:none;border-top:1px solid #ddd;">';
-                div.innerHTML += '<strong>Color = Equity</strong><br>';
-                for (const [cat, color] of Object.entries(COLORS)) {
-                    div.innerHTML += `<span style="display:inline-block;width:12px;height:12px;background:${color};border-radius:2px;margin-right:4px;"></span> ${cat}<br>`;
-                }
-                return div;
-            };
-            legend.addTo(leafletMap);
-
-            data.forEach(c => {
+            mapData.forEach(c => {
                 const radius = Math.max(6, Math.min(18, c.population / 300000));
                 L.circleMarker([c.lat, c.lon], {
                     radius: radius,
@@ -247,8 +281,8 @@
                   `);
             });
 
-            const allCoords = data.map(c => [c.lat, c.lon]);
-            if (allCoords.length) leafletMap.fitBounds(allCoords, { padding: [30, 30] });
+            const allCoords = mapData.map(c => [c.lat, c.lon]);
+            leafletMap.fitBounds(allCoords, { padding: [30, 30] });
             setTimeout(() => leafletMap.invalidateSize(), 300);
         }
 
@@ -358,6 +392,87 @@
                     }
                 }
             });
+        }
+
+        function renderBoxPlot(data) {
+            const el = document.getElementById('box-plot');
+            if (!el) return;
+
+            const values = data.map(c => c.pop_to_tree_ratio).sort((a, b) => a - b);
+            const n = values.length;
+            if (n < 2) return;
+
+            function q(sorted, p) {
+                const pos = (sorted.length - 1) * p;
+                const lo = Math.floor(pos);
+                const hi = Math.ceil(pos);
+                if (lo === hi) return sorted[lo];
+                return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+            }
+
+            const q1 = q(values, 0.25);
+            const q2 = q(values, 0.5);
+            const q3 = q(values, 0.75);
+            const min = values[0];
+            const max = values[n - 1];
+
+            function fmt(v) {
+                if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                if (v >= 1000) return (v / 1000).toFixed(1) + 'K';
+                return v.toLocaleString();
+            }
+
+            const bands = [
+                { lo: min, hi: q1, color: '#2d8a4e', label: 'Excellent' },
+                { lo: q1, hi: q2, color: '#f0c040', label: 'Good' },
+                { lo: q2, hi: q3, color: '#e98a2e', label: 'Fair' },
+                { lo: q3, hi: max, color: '#d9534f', label: 'Needs Improvement' },
+            ];
+
+            const shapes = bands.map(b => ({
+                type: 'rect', x0: b.lo, x1: b.hi, y0: 0, y1: 1, yref: 'paper',
+                fillcolor: b.color, opacity: 0.15, line: { width: 0 },
+            }));
+
+            const traces = [
+                {
+                    type: 'box', y: [''], x: data.map(c => c.pop_to_tree_ratio),
+                    orientation: 'h', boxpoints: 'all', jitter: 0.3, pointpos: 0,
+                    fillcolor: 'rgba(0,0,0,0)',
+                    line: { color: '#444', width: 2 },
+                    marker: {
+                        color: data.map(c => COLORS[c.equity_category]),
+                        size: 7, line: { color: 'white', width: 1 }, opacity: 0.85,
+                    },
+                    hovertext: data.map(c =>
+                        `<b>${c.city_name}</b><br>${c.country}<br>Ratio: ${c.pop_to_tree_ratio.toLocaleString()}<br>Equity: ${c.equity_category}`
+                    ),
+                    hoverinfo: 'text', whiskerwidth: 0.5, showlegend: false,
+                },
+                ...bands.map(b => ({
+                    type: 'scatter', x: [null], y: [null], mode: 'markers',
+                    marker: { color: b.color, size: 14, line: { color: 'white', width: 1 } },
+                    name: `${b.label} (${fmt(b.lo)}\u2013${fmt(b.hi)})`,
+                    showlegend: true, hoverinfo: 'none',
+                })),
+            ];
+
+            Plotly.react(el, traces, {
+                xaxis: {
+                    type: 'log',
+                    title: { text: 'Population-to-Tree Ratio (people per km\u00b2 of tree cover)' },
+                    gridcolor: '#e8e8e8', zeroline: false, tickfont: { size: 11 },
+                },
+                yaxis: { showticklabels: false, showgrid: false, zeroline: false },
+                shapes, plot_bgcolor: '#f5f5f5', paper_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 10, r: 10, t: 10, b: 55 },
+                height: 260,
+                legend: {
+                    orientation: 'h', y: -0.3, x: 0.5, xanchor: 'center',
+                    font: { size: 11 }, traceorder: 'normal',
+                },
+                hovermode: 'closest',
+            }, { responsive: true, displayModeBar: false });
         }
 
         function renderTable(data) {

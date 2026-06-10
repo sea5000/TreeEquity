@@ -16,32 +16,21 @@ def query_all_cities():
     conn = get_connection()
     rows = conn.execute("""
         SELECT
-            ci.id AS city_id,
-            ci.name AS city_name,
-            c.name AS country,
-            c.iso_code,
-            ci.population,
-            ci.urban_area_km2,
-            ci.lat,
-            ci.lon,
-            ROUND(ut.tree_percentage, 2) AS tree_pct,
-            ROUND(ut.tree_cover_km2, 2) AS tree_km2,
-            ROUND(cr.pop_density, 0) AS pop_density,
-            ROUND(cr.tree_density, 6) AS tree_density,
-            ROUND(cr.pop_to_tree_ratio, 0) AS pop_to_tree_ratio,
-            (SELECT COUNT(*) FROM city_rankings) + 1 - cr.rank AS equity_rank,
-            CASE
-                WHEN cr.pop_to_tree_ratio < 64000 THEN 'Excellent'
-                WHEN cr.pop_to_tree_ratio < 142000 THEN 'Good'
-                WHEN cr.pop_to_tree_ratio < 250000 THEN 'Fair'
-                ELSE 'Needs Improvement'
-            END AS equity_category
-        FROM cities ci
-        JOIN countries c ON c.id = ci.country_id
-        JOIN urban_trees ut ON ut.city_id = ci.id
-        JOIN city_rankings cr ON cr.city_id = ci.id
-        WHERE ci.lat IS NOT NULL AND ci.lon IS NOT NULL
-        ORDER BY equity_rank ASC
+            id AS city_id,
+            city AS city_name,
+            country,
+            population,
+            urban_area_km2,
+            lat,
+            lon,
+            ROUND(tree_percentage, 2) AS tree_pct,
+            ROUND(tree_cover_km2, 2) AS tree_km2,
+            ROUND(population_density, 0) AS pop_density,
+            ROUND(tree_density_per_km2, 6) AS tree_density,
+            ROUND(pop_to_tree_ratio, 0) AS pop_to_tree_ratio,
+            rank AS equity_rank
+        FROM city_tree_rankings
+        ORDER BY rank ASC
     """).fetchall()
     conn.close()
     return [dict(r) for r in rows]

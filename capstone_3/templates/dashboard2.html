@@ -27,9 +27,9 @@
             </div>
             <div class="filter-group">
                 <label>Pop Range:</label>
-                <input type="range" id="pop-min" min="0" max="9000000" value="0" step="100000">
-                <input type="range" id="pop-max" min="0" max="9000000" value="9000000" step="100000">
-                <span id="pop-label" style="font-size:0.85rem;color:#666;">0 — 9M</span>
+                <input type="range" id="pop-min" min="0" max="14000000" value="0" step="100000">
+                <input type="range" id="pop-max" min="0" max="14000000" value="14000000" step="100000">
+                <span id="pop-label" style="font-size:0.85rem;color:#666;">0 — 14M</span>
             </div>
             <div class="filter-group checkbox-group">
                 <label><input type="checkbox" class="equity-cb" value="Excellent" checked> Excellent</label>
@@ -122,9 +122,31 @@
         ];
         function cityColor(cityId) { return CITY_PALETTE[cityId % CITY_PALETTE.length]; }
 
+        function quartile(sorted, q) {
+            const pos = (sorted.length - 1) * q;
+            const lower = Math.floor(pos);
+            const upper = Math.ceil(pos);
+            if (lower === upper) return sorted[lower];
+            return sorted[lower] + (sorted[upper] - sorted[lower]) * (pos - lower);
+        }
+
+        function computeEquityCategories(cities) {
+            const values = cities.map(c => c.pop_to_tree_ratio).sort((a, b) => a - b);
+            const q1 = quartile(values, 0.25);
+            const q2 = quartile(values, 0.5);
+            const q3 = quartile(values, 0.75);
+            return cities.map(c => ({
+                ...c,
+                equity_category: c.pop_to_tree_ratio <= q1 ? 'Excellent'
+                    : c.pop_to_tree_ratio <= q2 ? 'Good'
+                    : c.pop_to_tree_ratio <= q3 ? 'Fair'
+                    : 'Needs Improvement'
+            }));
+        }
+
         async function loadData() {
             const resp = await fetch('/api/cities');
-            allCities = await resp.json();
+            allCities = computeEquityCategories(await resp.json());
             populateCitySelect();
             applyFilters();
         }
