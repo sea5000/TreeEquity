@@ -339,6 +339,21 @@ table.data-table tr.needs-improvement { border-left: 3px solid #d9534f; }
     color: #888;
 }
 
+.data-note {
+    background: #fff8e1;
+    border-radius: 6px;
+    border-left: 4px solid #f0c040;
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 0.82rem;
+    color: #666;
+    line-height: 1.6;
+}
+
+.data-note strong {
+    color: #444;
+}
+
 @media (max-width: 900px) {
     .chart-grid {
         grid-template-columns: 1fr;
