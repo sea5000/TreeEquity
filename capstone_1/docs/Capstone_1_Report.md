@@ -117,24 +117,34 @@ OUTPUT: Rankings by tree cover km2 and percentage
 
 ### Implementation
 
-#### stage1_import.py
+#### import_data.py
 
 ```python
+BASE_DIR = os.environ.get("KEMV_DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+
 # 1. Read population TSV
 with gzip.open(POP_PATH, 'rt') as f:
     for line in f:
+        parts = line.strip().split('\t')
         geo = parts[0].split(',')[-1]
-        pop = int(val)
-        population[geo] = pop
+        if re.match(r'^[A-Z]{2}[0-9]{2,3}$', geo):
+            for val in reversed(parts[1:]):
+                try:
+                    pop_data[geo] = int(val.strip())
+                    break
+                except: continue
 
 # 2. Read NUTS mapping from Excel
 df = pd.read_excel(NUTS_XLSX, sheet_name='Metropolitan')
-nuts_map = {row['NUTS2']: row['METRO LABEL']}
+metro = df[df['METRO (No/Yes)'] == 'Y']
+nuts_map = {}
+for _, row in metro.iterrows():
+    nuts_map[str(row['NUTS ID'])[:4]] = row['METRO LABEL']
 
 # 3. Merge population with NUTS mapping
-merged = {}
-for nuts, pop in population.items():
+for nuts, pop in pop_data.items():
     name = nuts_map.get(nuts[:4], nuts)
+    key = norm(name)
     merged[key] = (nuts, name, pop)
 
 # 4. Match FUA and extract tree cover
@@ -142,16 +152,23 @@ with tempfile.TemporaryDirectory() as tmpd:
     with zipfile.ZipFile(zf_path, 'r') as z:
         z.extractall(tmpd)
     with fiona.open(fgb, 'r') as src:
-        geoms = [shape(f['geometry']) for f in src if shape(f['geometry']).is_valid]
-    union = unary_union(geoms[:500])
+        geoms = [shape(f['geometry']) for f in src if shape(f['geometry']).is_valid][:500]
+    union = unary_union(geoms)
     area_km2 = union.area / 1_000_000
     
     with rasterio.open(RASTER_PATH) as rst:
+        bbox = union.bounds
         window = rasterio.windows.from_bounds(bbox, rst.transform)
+        col_off = int(round(window.col_off))
+        row_off = int(round(window.row_off))
+        width = int(round(window.width))
+        height = int(round(window.height))
+        window = rasterio.windows.Window(col_off, row_off, width, height)
         data = rst.read(window=window)
-        mask = geometry_mask([union], window.shape)
-        tree_pixels = np.sum((data[0] > 0) & mask)
-        tree_km2 = tree_pixels * PIXEL_KM2
+        mask = geometry_mask([union], (height, width),
+            rst.window_transform(window), invert=True)
+        tree_pix = int(np.sum((data[0] > 0) & mask))
+        tree_km2 = tree_pix * PIXEL_KM2
 
 # 5. Save to DB
 c.execute("INSERT INTO regions ...", (name, nuts, pop, area_km2, tree_km2, tree_pct))
@@ -218,6 +235,6 @@ Applied to match NUTS codes with FUA boundaries:
 
 | Rank | Region | Pop | Area km² | Tree km² | Tree % |
 |------|--------|-----|----------|----------|-------|
-| 1 | Brasov | 2.3M | 316 | 275 | 86.9% |
-| 2 | Varna | 827K | 133 | 108 | 80.9% |
-| 3 | Oslo | 2.1M | 121 | 95 | 78.8% |
+| 1 | Ostrava | 1.2M | 95 | 88 | 92.6% |
+| 2 | Brasov | 2.3M | 316 | 275 | 86.9% |
+| 3 | Karlsruhe | 2.8M | 63 | 52 | 82.8% |

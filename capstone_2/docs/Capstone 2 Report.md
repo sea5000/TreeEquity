@@ -19,7 +19,7 @@ CREATE TABLE countries (
 );
 
 CREATE TABLE regions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY,
     name TEXT,
     nuts_code TEXT,
     population INTEGER,
@@ -67,8 +67,7 @@ CREATE TABLE urban_trees_ua (
     green_km2 REAL,
     tree_pct REAL,
     rank INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (city_id) REFERENCES cities(id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE city_rankings (
@@ -362,20 +361,21 @@ This project analyzes the relationship between population density and tree canop
 
 ## Dataset Structure
 
-The database contains 8 tables with a total of 433 records across all entities.
+The database contains 8 core tables with a total of 433 records across all entities. An additional `city_tree_rankings` table (98 records, 42 countries) was added during Capstone 3 dashboard development, bringing the full database to 9 tables with 531 records.
 
 ### Entities Overview
 
-| Entity                 | Table               | Rows | Description                                     |
-| ---------------------- | ------------------- | ---- | ----------------------------------------------- |
-| Country                | `countries`         | 51   | European countries with ISO codes and area      |
-| NUTS Region            | `regions`           | 212  | NUTS2 regions with population and tree cover    |
-| City                   | `cities`            | 30   | Major European cities with coordinates          |
-| Urban Tree Canopy      | `urban_trees`       | 30   | Tree cover from Copernicus TCD 2015 raster      |
-| Urban Atlas Land Cover | `urban_trees_ua`    | 29   | Land cover classification from Urban Atlas 2021 |
-| City Ranking           | `city_rankings`     | 28   | Rankings based on tree density metrics          |
-| Population Record      | `population_annual` | 51   | Annual population counts by country             |
-| Data Source            | `source_metadata`   | 2    | Metadata about data sources                     |
+| Entity                 | Table                | Rows | Description                                     |
+| ---------------------- | -------------------- | ---- | ----------------------------------------------- |
+| Country                | `countries`          | 51   | European countries with ISO codes and area      |
+| NUTS Region            | `regions`            | 212  | NUTS2 regions with population and tree cover    |
+| City                   | `cities`             | 30   | Major European cities with coordinates          |
+| Urban Tree Canopy      | `urban_trees`        | 30   | Tree cover from Copernicus TCD 2015 raster      |
+| Urban Atlas Land Cover | `urban_trees_ua`     | 29   | Land cover classification from Urban Atlas 2021 |
+| City Ranking           | `city_rankings`      | 28   | Rankings based on tree density metrics          |
+| Population Record      | `population_annual`  | 51   | Annual population counts by country             |
+| Data Source            | `source_metadata`    | 2    | Metadata about data sources                     |
+| City Rankings Expanded | `city_tree_rankings` | 98   | Expanded city dataset with equity metrics (added in Capstone 3) |
 
 ### Key Attributes
 
@@ -393,4 +393,6 @@ The database contains 8 tables with a total of 433 records across all entities.
 | Copernicus Urban Atlas 2021 | FUA boundaries in GeoPackage format          | 768 metropolitan areas  |
 | Copernicus TCD 2015         | Tree Cover Density raster at 20m resolution  | 1 raster covering EU    |
 | NUTS2021                    | NUTS classification with metropolitan labels | 229 entries             |
-| Wikipedia                   | European country and city data               | 51 countries, 30 cities |
+| Wikipedia                   | European country and city data               | 51 countries, 98 cities |
+
+> The `source_metadata` table contains legacy placeholder entries (OpenCellID, Wikipedia) from earlier development. The actual data pipeline sources are documented above.
