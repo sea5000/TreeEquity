@@ -435,12 +435,23 @@
                 fillcolor: b.color, opacity: 0.15, line: { width: 0 },
             }));
 
+            const yJitter = data.map((_, i) => {
+                const seed = (i * 2654435761 + 12345) % 1000;
+                return (seed / 1000 - 0.5) * 0.6;
+            });
+
             const traces = [
                 {
-                    type: 'box', y: [''], x: data.map(c => c.pop_to_tree_ratio),
-                    orientation: 'h', boxpoints: 'all', jitter: 0.3, pointpos: 0,
+                    type: 'box', y: [0], x: values,
+                    orientation: 'h', boxpoints: false,
                     fillcolor: 'rgba(0,0,0,0)',
                     line: { color: '#444', width: 2 },
+                    whiskerwidth: 0.5, showlegend: false,
+                },
+                {
+                    type: 'scatter', mode: 'markers',
+                    x: data.map(c => c.pop_to_tree_ratio),
+                    y: yJitter,
                     marker: {
                         color: data.map(c => COLORS[c.equity_category]),
                         size: 8, line: { color: 'white', width: 1 }, opacity: 0.85,
@@ -448,7 +459,7 @@
                     hovertext: data.map(c =>
                         `<b>${c.city_name}</b><br>${c.country}<br>Ratio: ${c.pop_to_tree_ratio.toLocaleString()}<br>Equity: ${c.equity_category}`
                     ),
-                    hoverinfo: 'text', whiskerwidth: 0.5, showlegend: false,
+                    hoverinfo: 'text', showlegend: false,
                 },
                 ...bands.map(b => ({
                     type: 'scatter', x: [null], y: [null], mode: 'markers',
@@ -464,7 +475,7 @@
                     title: { text: 'Population-to-Tree Ratio (people per km\u00b2 of tree cover)' },
                     gridcolor: '#e8e8e8', zeroline: false, tickfont: { size: 11 },
                 },
-                yaxis: { showticklabels: false, showgrid: false, zeroline: false },
+                yaxis: { showticklabels: false, showgrid: false, zeroline: false, range: [-0.8, 0.8] },
                 shapes, plot_bgcolor: '#f5f5f5', paper_bgcolor: 'rgba(0,0,0,0)',
                 margin: { l: 10, r: 10, t: 10, b: 55 },
                 height: 260,
