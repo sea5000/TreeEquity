@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>European Tree Cover Atlas</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist@2/plotly-basic.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js@2/plotly.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -126,9 +126,6 @@
             </div>
         </div>
 
-        <div class="data-note">
-            <strong>Note on data sources:</strong> Population and area figures come from the Copernicus Urban Atlas, which defines urban boundaries by Functional Urban Area (city + commuter belt) rather than administrative city limits. When these boundaries differ significantly from the municipal area, metrics like tree cover percentage and population-to-tree ratio may not perfectly reflect conditions within the official city boundary. For example, Eisenstadt (Austria) is listed with ~31K FUA population vs ~16K city proper, and its 0.03% tree cover applies within a 4 km² urban core rather than the full 42.9 km² administrative area. Always consider the source definition when interpreting individual city rankings.
-        </div>
     </div>
 
     <script>
@@ -438,23 +435,12 @@
                 fillcolor: b.color, opacity: 0.15, line: { width: 0 },
             }));
 
-            const yJitter = data.map((_, i) => {
-                const seed = (i * 2654435761 + 12345) % 1000;
-                return (seed / 1000 - 0.5) * 0.6;
-            });
-
             const traces = [
                 {
-                    type: 'box', y: [''], x: values,
-                    orientation: 'h', boxpoints: false,
+                    type: 'box', y: [''], x: data.map(c => c.pop_to_tree_ratio),
+                    orientation: 'h', boxpoints: 'all', jitter: 0.3, pointpos: 0,
                     fillcolor: 'rgba(0,0,0,0)',
                     line: { color: '#444', width: 2 },
-                    whiskerwidth: 0.5, showlegend: false,
-                },
-                {
-                    type: 'scatter', mode: 'markers',
-                    x: data.map(c => c.pop_to_tree_ratio),
-                    y: yJitter,
                     marker: {
                         color: data.map(c => COLORS[c.equity_category]),
                         size: 8, line: { color: 'white', width: 1 }, opacity: 0.85,
@@ -462,7 +448,7 @@
                     hovertext: data.map(c =>
                         `<b>${c.city_name}</b><br>${c.country}<br>Ratio: ${c.pop_to_tree_ratio.toLocaleString()}<br>Equity: ${c.equity_category}`
                     ),
-                    hoverinfo: 'text', showlegend: false,
+                    hoverinfo: 'text', whiskerwidth: 0.5, showlegend: false,
                 },
                 ...bands.map(b => ({
                     type: 'scatter', x: [null], y: [null], mode: 'markers',
@@ -478,7 +464,7 @@
                     title: { text: 'Population-to-Tree Ratio (people per km\u00b2 of tree cover)' },
                     gridcolor: '#e8e8e8', zeroline: false, tickfont: { size: 11 },
                 },
-                yaxis: { showticklabels: false, showgrid: false, zeroline: false, range: [-0.8, 0.8] },
+                yaxis: { showticklabels: false, showgrid: false, zeroline: false },
                 shapes, plot_bgcolor: '#f5f5f5', paper_bgcolor: 'rgba(0,0,0,0)',
                 margin: { l: 10, r: 10, t: 10, b: 55 },
                 height: 260,
